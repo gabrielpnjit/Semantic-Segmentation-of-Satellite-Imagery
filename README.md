@@ -7,3 +7,4 @@
 3. Installed NNI and obtained screenshot of web UI
 
 NNI Web UI
+![image](nniui.png)
