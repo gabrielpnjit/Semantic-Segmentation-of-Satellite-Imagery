@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "poetry-semantic-segmentation-project"
+version = "0.1.0"
+description = ""
+authors = ["Gabriel Pascual <gzp2@njit.edu>"]
+readme = "README.md"
+packages = [{include = "poetry_semantic_segmentation_project"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.11"
+numpy = "^1.23.4"
+opencv-python = "^4.6.0.66"
+matplotlib = "^3.6.1"
+patchify = "^0.2.3"
+pillow = "^9.3.0"
+sklearn = "^0.0"
+keras = "^2.10.0"
+segmentation-models = "^1.0.1"
+tensorflow = "^2.10.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
