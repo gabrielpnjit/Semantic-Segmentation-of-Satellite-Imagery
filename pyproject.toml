@@ -17,6 +17,7 @@ sklearn = "^0.0"
 keras = "^2.10.0"
 segmentation-models = "^1.0.1"
 tensorflow = "^2.10.0"
+nni = "^2.9"
 
 
 [build-system]
