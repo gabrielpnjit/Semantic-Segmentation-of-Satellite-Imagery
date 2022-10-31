@@ -1,3 +1,6 @@
+Gabriel Pascual
+Rafael Rodriguez
+
 # Milestone 1
 
 ### Instructions Followed:
