@@ -2,8 +2,8 @@
 Add Unet Images to describe the results and connect it to 
 -->
 # Unet - Figures Produced
-![image](https://user-images.githubusercontent.com/89927101/200209528-457c4e85-e8f7-4f0c-90af-b05a8a1f71b1.png)
-![image](https://user-images.githubusercontent.com/89927101/200209566-93c5c3b9-b24e-4d16-a0b1-a7e121dd2ceb.png)
+![image](https://user-images.githubusercontent.com/89927101/200221144-68b86bbb-28f0-45e1-97b0-4a02cec5592b.png)
+![image](https://user-images.githubusercontent.com/89927101/200221169-67fcd39d-01d6-4b41-a97c-890625b94624.png)
 ## Unet Explanation
 >Unet is a common architechture for semantic segmentation. Unet helps identify and classify the image, and it classifies these as pixel-based classification. The Unet
 >architecture follows an encoder network followed by a decoder network. What makes it special is that it projects different features it learns at different stages of the 
