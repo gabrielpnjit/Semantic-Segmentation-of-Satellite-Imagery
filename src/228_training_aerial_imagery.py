@@ -30,14 +30,20 @@ Total 1305 patches of size 256x256
 import os
 import cv2
 import numpy as np
+import keras
+import keras_metrics
 
 from matplotlib import pyplot as plt
 from patchify import patchify
 from PIL import Image
 import segmentation_models as sm
 from tensorflow.keras.metrics import MeanIoU
-
+# import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
+
+# gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.333)
+# session = tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_options))
+
 scaler = MinMaxScaler()
 
 root_directory = 'Semantic segmentation dataset/'
@@ -140,16 +146,12 @@ the first hexadecimal digit (between 0 and F, where the letters A to F represent
 the numbers 10 to 15). The remainder gives the second hexadecimal digit. 
 0-9 --> 0-9
 10-15 --> A-F
-
 Example: RGB --> R=201, G=, B=
-
 R = 201/16 = 12 with remainder of 9. So hex code for R is C9 (remember C=12)
-
 Calculating RGB from HEX: #3C1098
 3C = 3*16 + 12 = 60
 10 = 1*16 + 0 = 16
 98 = 9*16 + 8 = 152
-
 """
 #Convert HEX to RGB array
 # Try the following to understand how python handles hex values...
@@ -252,7 +254,7 @@ IMG_CHANNELS = X_train.shape[3]
 
 from simple_multi_unet_model import multi_unet_model, jacard_coef  
 
-metrics=['accuracy', jacard_coef]
+metrics=['accuracy', jacard_coef, keras.metrics.Precision(), keras.metrics.Recall()]
 
 def get_model():
     return multi_unet_model(n_classes=n_classes, IMG_HEIGHT=IMG_HEIGHT, IMG_WIDTH=IMG_WIDTH, IMG_CHANNELS=IMG_CHANNELS)
@@ -264,7 +266,7 @@ model.summary()
 
 
 history1 = model.fit(X_train, y_train, 
-                    batch_size = 16, 
+                    batch_size = 1, 
                     verbose=1, 
                     epochs=100, 
                     validation_data=(X_test, y_test), 
@@ -285,33 +287,33 @@ history1 = model.fit(X_train, y_train,
 ##Standardscaler 
 #Using categorical crossentropy as loss: 0.677
 
-#model.save('models/satellite_standard_unet_100epochs_7May2021.hdf5')
+model.save('models/satellite_standard_unet_100epochs.hdf5')
 ############################################################
 #TRY ANOTHE MODEL - WITH PRETRINED WEIGHTS
 #Resnet backbone
-BACKBONE = 'resnet34'
-preprocess_input = sm.get_preprocessing(BACKBONE)
+# BACKBONE = 'resnet34'
+# preprocess_input = sm.get_preprocessing(BACKBONE)
 
-# preprocess input
-X_train_prepr = preprocess_input(X_train)
-X_test_prepr = preprocess_input(X_test)
+# # preprocess input
+# X_train_prepr = preprocess_input(X_train)
+# X_test_prepr = preprocess_input(X_test)
 
-# define model
-model_resnet_backbone = sm.Unet(BACKBONE, encoder_weights='imagenet', classes=n_classes, activation='softmax')
+# # define model
+# model_resnet_backbone = sm.Unet(BACKBONE, encoder_weights='imagenet', classes=n_classes, activation='softmax')
 
-# compile keras model with defined optimozer, loss and metrics
-#model_resnet_backbone.compile(optimizer='adam', loss=focal_loss, metrics=metrics)
-model_resnet_backbone.compile(optimizer='adam', loss='categorical_crossentropy', metrics=metrics)
+# # compile keras model with defined optimozer, loss and metrics
+# #model_resnet_backbone.compile(optimizer='adam', loss=focal_loss, metrics=metrics)
+# model_resnet_backbone.compile(optimizer='adam', loss='categorical_crossentropy', metrics=metrics)
 
-print(model_resnet_backbone.summary())
+# print(model_resnet_backbone.summary())
 
 
-history2=model_resnet_backbone.fit(X_train_prepr, 
-          y_train,
-          batch_size=16, 
-          epochs=100,
-          verbose=1,
-          validation_data=(X_test_prepr, y_test))
+# history2=model_resnet_backbone.fit(X_train_prepr, 
+#           y_train,
+#           batch_size=1, 
+#           epochs=1,
+#           verbose=1,
+#           validation_data=(X_test_prepr, y_test))
 
 #Minmaxscaler
 #With weights...[0.1666, 0.1666, 0.1666, 0.1666, 0.1666, 0.1666]   in Dice loss
@@ -350,11 +352,21 @@ plt.ylabel('IoU')
 plt.legend()
 plt.show()
 
+###########################################################
+#plot the precision vs recall at each epoch
+precision = history.history['precision']
+recall = history.history['recall']
+plt.plot(recall, precision, 'y', label='Precision vs recall')
+plt.title('Precision vs Recall Curve')
+plt.xlabel('Recall')
+plt.ylabel('Precision')
+plt.legend()
+plt.show()
 
 ##################################
 from keras.models import load_model
 model = load_model("models/satellite_standard_unet_100epochs.hdf5",
-                   custom_objects={'dice_loss_plus_2focal_loss': total_loss,
+                   custom_objects={'dice_loss_plus_1focal_loss': total_loss,
                                    'jacard_coef':jacard_coef})
 
 #IOU
@@ -374,25 +386,26 @@ print("Mean IoU =", IOU_keras.result().numpy())
 #Predict on a few images
 
 import random
-test_img_number = random.randint(0, len(X_test))
-test_img = X_test[test_img_number]
-ground_truth=y_test_argmax[test_img_number]
-#test_img_norm=test_img[:,:,0][:,:,None]
-test_img_input=np.expand_dims(test_img, 0)
-prediction = (model.predict(test_img_input))
-predicted_img=np.argmax(prediction, axis=3)[0,:,:]
+for test_img_number in range (len(X_test)):
+	# test_img_number = random.randint(0, len(X_test))
+	test_img = X_test[test_img_number]
+	ground_truth=y_test_argmax[test_img_number]
+	#test_img_norm=test_img[:,:,0][:,:,None]
+	test_img_input=np.expand_dims(test_img, 0)
+	prediction = (model.predict(test_img_input))
+	predicted_img=np.argmax(prediction, axis=3)[0,:,:]
 
 
-plt.figure(figsize=(12, 8))
-plt.subplot(231)
-plt.title('Testing Image')
-plt.imshow(test_img)
-plt.subplot(232)
-plt.title('Testing Label')
-plt.imshow(ground_truth)
-plt.subplot(233)
-plt.title('Prediction on test image')
-plt.imshow(predicted_img)
-plt.show()
+	plt.figure(figsize=(12, 8))
+	plt.subplot(231)
+	plt.title('Testing Image')
+	plt.imshow(test_img)
+	plt.subplot(232)
+	plt.title('Testing Label')
+	plt.imshow(ground_truth)
+	plt.subplot(233)
+	plt.title('Prediction on test image')
+	plt.imshow(predicted_img)
+	plt.show()
 
 #####################################################################
