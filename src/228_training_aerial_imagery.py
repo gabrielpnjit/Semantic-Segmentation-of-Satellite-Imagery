@@ -268,7 +268,7 @@ model.summary()
 history1 = model.fit(X_train, y_train, 
                     batch_size = 1, 
                     verbose=1, 
-                    epochs=100, 
+                    epochs=5, 
                     validation_data=(X_test, y_test), 
                     shuffle=False)
 
@@ -287,7 +287,7 @@ history1 = model.fit(X_train, y_train,
 ##Standardscaler 
 #Using categorical crossentropy as loss: 0.677
 
-model.save('models/satellite_standard_unet_100epochs.hdf5')
+model.save('models/satellite_standard_unet_100epochs_BOHB.hdf5')
 ############################################################
 #TRY ANOTHE MODEL - WITH PRETRINED WEIGHTS
 #Resnet backbone
@@ -365,7 +365,7 @@ plt.show()
 
 ##################################
 from keras.models import load_model
-model = load_model("models/satellite_standard_unet_100epochs.hdf5",
+model = load_model("models/satellite_standard_unet_100epochs_BOHB.hdf5",
                    custom_objects={'dice_loss_plus_1focal_loss': total_loss,
                                    'jacard_coef':jacard_coef})
 
@@ -387,25 +387,25 @@ print("Mean IoU =", IOU_keras.result().numpy())
 
 import random
 for test_img_number in range (len(X_test)):
-	# test_img_number = random.randint(0, len(X_test))
-	test_img = X_test[test_img_number]
-	ground_truth=y_test_argmax[test_img_number]
-	#test_img_norm=test_img[:,:,0][:,:,None]
-	test_img_input=np.expand_dims(test_img, 0)
-	prediction = (model.predict(test_img_input))
-	predicted_img=np.argmax(prediction, axis=3)[0,:,:]
+    # test_img_number = random.randint(0, len(X_test))
+    test_img = X_test[test_img_number]
+    ground_truth=y_test_argmax[test_img_number]
+    #test_img_norm=test_img[:,:,0][:,:,None]
+    test_img_input=np.expand_dims(test_img, 0)
+    prediction = (model.predict(test_img_input))
+    predicted_img=np.argmax(prediction, axis=3)[0,:,:]
 
 
-	plt.figure(figsize=(12, 8))
-	plt.subplot(231)
-	plt.title('Testing Image')
-	plt.imshow(test_img)
-	plt.subplot(232)
-	plt.title('Testing Label')
-	plt.imshow(ground_truth)
-	plt.subplot(233)
-	plt.title('Prediction on test image')
-	plt.imshow(predicted_img)
-	plt.show()
+    plt.figure(figsize=(12, 8))
+    plt.subplot(231)
+    plt.title('Testing Image')
+    plt.imshow(test_img)
+    plt.subplot(232)
+    plt.title('Testing Label')
+    plt.imshow(ground_truth)
+    plt.subplot(233)
+    plt.title('Prediction on test image')
+    plt.imshow(predicted_img)
+    plt.show()
 
 #####################################################################
