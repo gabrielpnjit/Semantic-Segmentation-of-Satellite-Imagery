@@ -30,6 +30,7 @@ Total 1305 patches of size 256x256
 import os
 import cv2
 import numpy as np
+import pandas as pd
 import keras
 import keras_metrics
 
@@ -41,6 +42,14 @@ from tensorflow.keras.metrics import MeanIoU
 # import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
+from worker import KerasWorker as worker
+import hpbandster.core.nameserver as hpns
+import hpbandster.core.result as hpres
+
+from hpbandster.optimizers import BOHB
+import logging
+import argparse
+logging.basicConfig(level=logging.DEBUG)
 # gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.333)
 # session = tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_options))
 
@@ -127,15 +136,15 @@ image_dataset = np.array(image_dataset)
 mask_dataset =  np.array(mask_dataset)
 
 #Sanity check, view few mages
-import random
-import numpy as np
-image_number = random.randint(0, len(image_dataset))
-plt.figure(figsize=(12, 6))
-plt.subplot(121)
-plt.imshow(np.reshape(image_dataset[image_number], (patch_size, patch_size, 3)))
-plt.subplot(122)
-plt.imshow(np.reshape(mask_dataset[image_number], (patch_size, patch_size, 3)))
-plt.show()
+# import random
+# import numpy as np
+# image_number = random.randint(0, len(image_dataset))
+# plt.figure(figsize=(12, 6))
+# plt.subplot(121)
+# plt.imshow(np.reshape(image_dataset[image_number], (patch_size, patch_size, 3)))
+# plt.subplot(122)
+# plt.imshow(np.reshape(mask_dataset[image_number], (patch_size, patch_size, 3)))
+# plt.show()
 
 
 ###########################################################################
@@ -210,15 +219,15 @@ labels = np.expand_dims(labels, axis=3)
 print("Unique labels in label dataset are: ", np.unique(labels))
 
 #Another Sanity check, view few mages
-import random
-import numpy as np
-image_number = random.randint(0, len(image_dataset))
-plt.figure(figsize=(12, 6))
-plt.subplot(121)
-plt.imshow(image_dataset[image_number])
-plt.subplot(122)
-plt.imshow(labels[image_number][:,:,0])
-plt.show()
+# import random
+# import numpy as np
+# image_number = random.randint(0, len(image_dataset))
+# plt.figure(figsize=(12, 6))
+# plt.subplot(121)
+# plt.imshow(image_dataset[image_number])
+# plt.subplot(122)
+# plt.imshow(labels[image_number][:,:,0])
+# plt.show()
 
 
 ############################################################################
@@ -259,14 +268,39 @@ metrics=['accuracy', jacard_coef, keras.metrics.Precision(), keras.metrics.Recal
 def get_model():
     return multi_unet_model(n_classes=n_classes, IMG_HEIGHT=IMG_HEIGHT, IMG_WIDTH=IMG_WIDTH, IMG_CHANNELS=IMG_CHANNELS)
 
+parser = argparse.ArgumentParser(description='Example 5 - CNN on MNIST')
+parser.add_argument('--min_budget',   type=float, help='Minimum number of epochs for training.',    default=1)
+parser.add_argument('--max_budget',   type=float, help='Maximum number of epochs for training.',    default=5)
+parser.add_argument('--n_iterations', type=int,   help='Number of iterations performed by the optimizer', default=2)
+parser.add_argument('--worker', help='Flag to turn this into a worker process', action='store_true')
+parser.add_argument('--run_id', type=str, help='A unique run id for this optimization run. An easy option is to use the job id of the clusters scheduler.')
+parser.add_argument('--nic_name',type=str, help='Which network interface to use for communication.', default='lo')
+parser.add_argument('--shared_directory',type=str, help='A directory that is accessible for all processes, e.g. a NFS share.', default='.')
+parser.add_argument('--backend',help='Toggles which worker is used. Choose between a pytorch and a keras implementation.', choices=['keras'], default='keras')
+
+args=parser.parse_args()
+NS = hpns.NameServer(run_id='example1', host='127.0.0.1', port=None)
+NS.start()
+
+w = worker(X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test, img_height=IMG_HEIGHT, img_width=IMG_WIDTH, img_channels=IMG_CHANNELS, sleep_interval=0, run_id='example1', nameserver='127.0.0.1')
+w.run(background=True)
+
+bohb = BOHB(  configspace = w.get_configspace(),
+              run_id = 'example1', nameserver='127.0.0.1',
+              min_budget=args.min_budget, max_budget=args.max_budget
+           )
+res = bohb.run(n_iterations=args.n_iterations)
+
+bohb.shutdown(shutdown_workers=True)
+NS.shutdown()
+
 model = get_model()
 model.compile(optimizer='adam', loss=total_loss, metrics=metrics)
-#model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=metrics)
+# model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=metrics)
 model.summary()
 
-
 history1 = model.fit(X_train, y_train, 
-                    batch_size = 1, 
+                    batch_size = 1,
                     verbose=1, 
                     epochs=5, 
                     validation_data=(X_test, y_test), 
