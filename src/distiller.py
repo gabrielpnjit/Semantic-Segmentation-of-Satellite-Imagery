@@ -3,7 +3,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 import numpy as np
 
-
+# distiller class from keras documentation
 class Distiller(keras.Model):
     def __init__(self, student, teacher):
         super(Distiller, self).__init__()
@@ -40,9 +40,6 @@ class Distiller(keras.Model):
             # Compute losses
             student_loss = self.student_loss_fn(y, student_predictions)
 
-            # Compute scaled distillation loss from https://arxiv.org/abs/1503.02531
-            # The magnitudes of the gradients produced by the soft targets scale
-            # as 1/T^2, multiply them by T^2 when using both hard and soft targets.
             distillation_loss = (
                 self.distillation_loss_fn(
                     tf.nn.softmax(teacher_predictions / self.temperature, axis=1),

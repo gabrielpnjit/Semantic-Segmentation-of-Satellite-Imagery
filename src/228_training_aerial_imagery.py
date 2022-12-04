@@ -46,9 +46,12 @@ from worker import KerasWorker as worker
 import hpbandster.core.nameserver as hpns
 import hpbandster.core.result as hpres
 
+from distiller import Distiller as Distiller
+
 from hpbandster.optimizers import BOHB
 import logging
 import argparse
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 logging.basicConfig(level=logging.DEBUG)
 # gpu_options = tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.333)
 # session = tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_options))
@@ -268,43 +271,70 @@ metrics=['accuracy', jacard_coef, keras.metrics.Precision(), keras.metrics.Recal
 def get_model():
     return multi_unet_model(n_classes=n_classes, IMG_HEIGHT=IMG_HEIGHT, IMG_WIDTH=IMG_WIDTH, IMG_CHANNELS=IMG_CHANNELS)
 
-parser = argparse.ArgumentParser(description='Example 5 - CNN on MNIST')
-parser.add_argument('--min_budget',   type=float, help='Minimum number of epochs for training.',    default=1)
-parser.add_argument('--max_budget',   type=float, help='Maximum number of epochs for training.',    default=5)
-parser.add_argument('--n_iterations', type=int,   help='Number of iterations performed by the optimizer', default=2)
-parser.add_argument('--worker', help='Flag to turn this into a worker process', action='store_true')
-parser.add_argument('--run_id', type=str, help='A unique run id for this optimization run. An easy option is to use the job id of the clusters scheduler.')
-parser.add_argument('--nic_name',type=str, help='Which network interface to use for communication.', default='lo')
-parser.add_argument('--shared_directory',type=str, help='A directory that is accessible for all processes, e.g. a NFS share.', default='.')
-parser.add_argument('--backend',help='Toggles which worker is used. Choose between a pytorch and a keras implementation.', choices=['keras'], default='keras')
+# parser = argparse.ArgumentParser(description='Example 5 - CNN on MNIST')
+# parser.add_argument('--min_budget',   type=float, help='Minimum number of epochs for training.',    default=1)
+# parser.add_argument('--max_budget',   type=float, help='Maximum number of epochs for training.',    default=5)
+# parser.add_argument('--n_iterations', type=int,   help='Number of iterations performed by the optimizer', default=2)
+# parser.add_argument('--worker', help='Flag to turn this into a worker process', action='store_true')
+# parser.add_argument('--run_id', type=str, help='A unique run id for this optimization run. An easy option is to use the job id of the clusters scheduler.')
+# parser.add_argument('--nic_name',type=str, help='Which network interface to use for communication.', default='lo')
+# parser.add_argument('--shared_directory',type=str, help='A directory that is accessible for all processes, e.g. a NFS share.', default='.')
+# parser.add_argument('--backend',help='Toggles which worker is used. Choose between a pytorch and a keras implementation.', choices=['keras'], default='keras')
 
-args=parser.parse_args()
-NS = hpns.NameServer(run_id='example1', host='127.0.0.1', port=None)
-NS.start()
+# args=parser.parse_args()
+# NS = hpns.NameServer(run_id='example1', host='127.0.0.1', port=None)
+# NS.start()
 
-w = worker(X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test, img_height=IMG_HEIGHT, img_width=IMG_WIDTH, img_channels=IMG_CHANNELS, sleep_interval=0, run_id='example1', nameserver='127.0.0.1')
-w.run(background=True)
+# w = worker(X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test, img_height=IMG_HEIGHT, img_width=IMG_WIDTH, img_channels=IMG_CHANNELS, sleep_interval=0, run_id='example1', nameserver='127.0.0.1')
+# w.run(background=True)
 
-bohb = BOHB(  configspace = w.get_configspace(),
-              run_id = 'example1', nameserver='127.0.0.1',
-              min_budget=args.min_budget, max_budget=args.max_budget
-           )
-res = bohb.run(n_iterations=args.n_iterations)
+# bohb = BOHB(  configspace = w.get_configspace(),
+#               run_id = 'example1', nameserver='127.0.0.1',
+#               min_budget=args.min_budget, max_budget=args.max_budget
+#            )
+# res = bohb.run(n_iterations=args.n_iterations)
 
-bohb.shutdown(shutdown_workers=True)
-NS.shutdown()
+# bohb.shutdown(shutdown_workers=True)
+# NS.shutdown()
 
-model = get_model()
-model.compile(optimizer='adam', loss=total_loss, metrics=metrics)
-# model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=metrics)
-model.summary()
+# model = get_model()
+# model.compile(optimizer='adam', loss=total_loss, metrics=metrics)
+# # model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=metrics)
+# model.summary()
 
-history1 = model.fit(X_train, y_train, 
+# Load teacher
+from keras.models import load_model
+teacher = load_model("models/satellite_standard_unet_100epochs.hdf5",
+                   custom_objects={'dice_loss_plus_1focal_loss': total_loss,
+                                   'jacard_coef':jacard_coef})
+# Initialize student
+student = get_model()
+
+# Initialize and compile distiller
+distiller = Distiller(student=student, teacher=teacher)
+distiller.compile(
+    optimizer=keras.optimizers.Adam(),
+    metrics=metrics,
+    student_loss_fn=keras.losses.CategoricalCrossentropy(from_logits=True),
+    distillation_loss_fn=keras.losses.KLDivergence(),
+    alpha=0.5,
+    temperature=2,
+)
+
+# Distill teacher to student
+history1 = distiller.fit(X_train, y_train, 
                     batch_size = 1,
                     verbose=1, 
                     epochs=5, 
                     validation_data=(X_test, y_test), 
                     shuffle=False)
+
+# history1 = model.fit(X_train, y_train, 
+#                     batch_size = 1,
+#                     verbose=1, 
+#                     epochs=5, 
+#                     validation_data=(X_test, y_test), 
+#                     shuffle=False)
 
 #Minmaxscaler
 #With weights...[0.1666, 0.1666, 0.1666, 0.1666, 0.1666, 0.1666]   in Dice loss
@@ -321,7 +351,7 @@ history1 = model.fit(X_train, y_train,
 ##Standardscaler 
 #Using categorical crossentropy as loss: 0.677
 
-model.save('models/satellite_standard_unet_100epochs_BOHB.hdf5')
+distiller.save_weights('models/satellite_standard_unet_student_weights')
 ############################################################
 #TRY ANOTHE MODEL - WITH PRETRINED WEIGHTS
 #Resnet backbone
@@ -364,12 +394,12 @@ model.save('models/satellite_standard_unet_100epochs_BOHB.hdf5')
 ###########################################################
 #plot the training and validation accuracy and loss at each epoch
 history = history1
-loss = history.history['loss']
-val_loss = history.history['val_loss']
+loss = history.history['student_loss']
+val_loss = history.history['val_student_loss']
 epochs = range(1, len(loss) + 1)
-plt.plot(epochs, loss, 'y', label='Training loss')
-plt.plot(epochs, val_loss, 'r', label='Validation loss')
-plt.title('Training and validation loss')
+plt.plot(epochs, loss, 'y', label='Student Training loss')
+plt.plot(epochs, val_loss, 'r', label='Student Validation loss')
+plt.title('Student Training and validation loss')
 plt.xlabel('Epochs')
 plt.ylabel('Loss')
 plt.legend()
@@ -378,9 +408,9 @@ plt.show()
 acc = history.history['jacard_coef']
 val_acc = history.history['val_jacard_coef']
 
-plt.plot(epochs, acc, 'y', label='Training IoU')
-plt.plot(epochs, val_acc, 'r', label='Validation IoU')
-plt.title('Training and validation IoU')
+plt.plot(epochs, acc, 'y', label='Student Training IoU')
+plt.plot(epochs, val_acc, 'r', label='Student Validation IoU')
+plt.title('Student Training and validation IoU')
 plt.xlabel('Epochs')
 plt.ylabel('IoU')
 plt.legend()
@@ -390,15 +420,14 @@ plt.show()
 #plot the precision vs recall at each epoch
 precision = history.history['precision']
 recall = history.history['recall']
-plt.plot(recall, precision, 'y', label='Precision vs recall')
-plt.title('Precision vs Recall Curve')
+plt.plot(recall, precision, 'y', label='Student Precision vs recall')
+plt.title('Student Precision vs Recall Curve')
 plt.xlabel('Recall')
 plt.ylabel('Precision')
 plt.legend()
 plt.show()
 
 ##################################
-from keras.models import load_model
 model = load_model("models/satellite_standard_unet_100epochs_BOHB.hdf5",
                    custom_objects={'dice_loss_plus_1focal_loss': total_loss,
                                    'jacard_coef':jacard_coef})

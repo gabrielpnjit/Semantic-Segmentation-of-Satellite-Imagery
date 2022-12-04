@@ -1,0 +1,2 @@
+model_checkpoint_path: "satellite_standard_unet_student_weights"
+all_model_checkpoint_paths: "satellite_standard_unet_student_weights"
