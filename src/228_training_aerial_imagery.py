@@ -325,7 +325,7 @@ distiller.compile(
 history1 = distiller.fit(X_train, y_train, 
                     batch_size = 1,
                     verbose=1, 
-                    epochs=5, 
+                    epochs=10, 
                     validation_data=(X_test, y_test), 
                     shuffle=False)
 
@@ -351,7 +351,7 @@ history1 = distiller.fit(X_train, y_train,
 ##Standardscaler 
 #Using categorical crossentropy as loss: 0.677
 
-distiller.save_weights('models/satellite_standard_unet_student_weights')
+student.save('models/satellite_standard_unet_student.hdf5')
 ############################################################
 #TRY ANOTHE MODEL - WITH PRETRINED WEIGHTS
 #Resnet backbone
@@ -428,9 +428,7 @@ plt.legend()
 plt.show()
 
 ##################################
-model = load_model("models/satellite_standard_unet_100epochs_BOHB.hdf5",
-                   custom_objects={'dice_loss_plus_1focal_loss': total_loss,
-                                   'jacard_coef':jacard_coef})
+model = keras.models.load_model('models/satellite_standard_unet_student.hdf5')
 
 #IOU
 y_pred=model.predict(X_test)
